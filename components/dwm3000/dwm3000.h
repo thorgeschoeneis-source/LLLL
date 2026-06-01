@@ -1,11 +1,10 @@
-#ifndef DW3000_H
-#define DW3000_H
+#ifndef DWM3000_H
+#define DWM3000_H
 
 #include <stdint.h>
 #include <esp_err.h>
-#include "driver/spi_master.h"
 
-// DW3000 Register Addresses
+// DW3000 / DWM3000 Register Addresses
 #define DW3000_DEV_ID        0x00
 #define DW3000_EUI          0x01
 #define DW3000_PANADR       0x03
@@ -45,32 +44,16 @@
 #define DW3000_DIG_DIAG     0x2F
 #define DW3000_PMSC         0x36
 
-// SYS_CTRL bit masks
-#define DW3000_SYS_CTRL_TXSTRT   0x02
-#define DW3000_SYS_CTRL_TXDLYS   0x04
-#define DW3000_SYS_CTRL_TRXOFF   0x40
-#define DW3000_SYS_CTRL_RXENAB   0x100
-
-// SYS_STATUS bit masks
-#define DW3000_SYS_STATUS_TXFRS  0x0080
-#define DW3000_SYS_STATUS_RXFCG  0x4000
-
 // DW3000 Commands
 #define DW3000_CMD_TXRXOFF  0x00
 #define DW3000_CMD_TX       0x01
 #define DW3000_CMD_RX       0x02
 
 // Frame types for UWB communication
-#define FRAME_TYPE_DATA      0x01
-#define FRAME_TYPE_ACK       0x02
+#define FRAME_TYPE_DATA     0x01
+#define FRAME_TYPE_ACK      0x02
 #define FRAME_TYPE_RANGE_REQ 0x03
 #define FRAME_TYPE_RANGE_RESP 0x04
-#define FRAME_TYPE_POLL      0x10
-#define FRAME_TYPE_POLL_ACK  0x11
-#define FRAME_TYPE_RANGE     0x12
-#define FRAME_TYPE_RANGE_REPORT 0x13
-
-#define DW3000_TIME_UNIT_METERS 0.0046917639786159f
 
 // UWB Communication Structure
 typedef struct {
@@ -82,26 +65,18 @@ typedef struct {
     uint8_t payload_len;
 } uwb_frame_t;
 
-// Shared symbols
-extern spi_device_handle_t uwb_spi;
-
 // Function declarations
-esp_err_t dw3000_init(void);
-esp_err_t dw3000_reset(void);
-esp_err_t dw3000_wakeup(void);
-esp_err_t dw3000_read_reg(uint16_t reg_addr, uint8_t *data, size_t len);
-esp_err_t dw3000_write_reg(uint16_t reg_addr, const uint8_t *data, size_t len);
-esp_err_t dw3000_get_rx_timestamp(uint64_t *timestamp);
-esp_err_t dw3000_get_tx_timestamp(uint64_t *timestamp);
-esp_err_t dw3000_set_tx_timestamp(uint64_t timestamp);
-esp_err_t dw3000_wait_tx_done(uint32_t timeout_ms);
-esp_err_t dw3000_send_frame(const uwb_frame_t *frame);
-esp_err_t dw3000_send_frame_delayed(const uwb_frame_t *frame, uint64_t tx_time);
-esp_err_t dw3000_receive_frame(uwb_frame_t *frame, uint32_t timeout_ms);
-esp_err_t dw3000_start_rx(void);
-esp_err_t dw3000_stop_rx(void);
-bool dw3000_is_frame_ready(void);
-esp_err_t dw3000_set_address(uint16_t short_addr);
-esp_err_t dw3000_configure_channel(uint8_t channel);
+esp_err_t dwm3000_init(void);
+esp_err_t dwm3000_reset(void);
+esp_err_t dwm3000_wakeup(void);
+esp_err_t dwm3000_read_reg(uint16_t reg_addr, uint8_t *data, size_t len);
+esp_err_t dwm3000_write_reg(uint16_t reg_addr, const uint8_t *data, size_t len);
+esp_err_t dwm3000_send_frame(const uwb_frame_t *frame);
+esp_err_t dwm3000_receive_frame(uwb_frame_t *frame, uint32_t timeout_ms);
+esp_err_t dwm3000_start_rx(void);
+esp_err_t dwm3000_stop_rx(void);
+bool dwm3000_is_frame_ready(void);
+esp_err_t dwm3000_set_address(uint16_t short_addr);
+esp_err_t dwm3000_configure_channel(uint8_t channel);
 
-#endif // DW3000_H
+#endif // DWM3000_H

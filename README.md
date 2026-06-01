@@ -1,26 +1,26 @@
 # UWB3000 Communication Example
 
-This project demonstrates communication between two ESP32-C6 boards using UWB3000 (DW3000) modules.
+This project demonstrates communication between two ESP32-C6 boards using DWM300 / DW3000 UWB modules.
 
 ## Hardware Setup
 
 Each board needs:
 - ESP32-C6 microcontroller
-- UWB3000 module
+- DWM300 / DW3000 UWB module
 - Connections as per pin mapping below
 
 ## Pin Mapping
 
-| ESP32-C6 Pin | UWB3000 Pin | Function |
+| ESP32-C6 Pin | DWM300 Pin | Function |
 |-------------|-------------|----------|
-| GPIO3      | SCLK        | SPI Clock |
-| GPIO4      | MISO        | SPI Master In Slave Out |
-| GPIO5      | IRQ         | Interrupt Request |
-| GPIO6      | CS          | SPI Chip Select |
-| GPIO7      | MOSI        | SPI Master Out Slave In |
-| GPIO14     | RESET       | Reset signal |
-| GPIO15     | WAKEUP      | Wakeup signal |
-| GPIO8      | -           | Status LED |
+| GPIO6       | SCLK        | SPI Clock |
+| GPIO9       | MISO        | SPI Master In Slave Out |
+| GPIO10      | IRQ         | Interrupt Request |
+| GPIO15      | CS          | SPI Chip Select |
+| GPIO16      | MOSI        | SPI Master Out Slave In |
+| GPIO19      | RESET       | Reset signal |
+| GPIO24      | WAKEUP      | Wakeup signal |
+| GPIO8       | -           | Status LED |
 
 ## Board Configuration
 

@@ -5,13 +5,28 @@
 #include "freertos/FreeRTOS.h"
 #include "freertos/task.h"
 #include <string.h>
+#include <stdlib.h>
+#include "pin_config.h"
 
 static const char *TAG = "DW3000";
-extern spi_device_handle_t uwb_spi;
+spi_device_handle_t uwb_spi = NULL;
 extern volatile bool uwb_irq_flag;
 
-// SPI transfer function (from main.c)
-extern esp_err_t uwb_spi_transfer(const uint8_t *tx_data, uint8_t *rx_data, size_t len);
+static esp_err_t uwb_spi_transfer(const uint8_t *tx_data, uint8_t *rx_data, size_t len)
+{
+    if (!tx_data || len == 0 || uwb_spi == NULL) {
+        return ESP_ERR_INVALID_ARG;
+    }
+
+    spi_transaction_t trans = {
+        .flags = 0,
+        .length = len * 8,
+        .tx_buffer = tx_data,
+        .rx_buffer = rx_data,
+    };
+
+    return spi_device_polling_transmit(uwb_spi, &trans);
+}
 
 esp_err_t dw3000_read_reg(uint16_t reg_addr, uint8_t *data, size_t len)
 {
@@ -52,11 +67,7 @@ esp_err_t dw3000_write_reg(uint16_t reg_addr, const uint8_t *data, size_t len)
         return ESP_ERR_INVALID_ARG;
     }
 
-    // DW3000 SPI header format: [Register Address (8-bit)]
-    // Bit 7: Read/Write (0=write, 1=read)
-    // Bits 6-0: Register address
-    uint8_t header = (0 << 7) | (reg_addr & 0x7F);  // Write bit + register address
-
+    uint8_t header = (0 << 7) | (reg_addr & 0x7F);
     uint8_t *tx_buffer = malloc(len + 1);
     if (!tx_buffer) {
         return ESP_ERR_NO_MEM;
@@ -71,12 +82,98 @@ esp_err_t dw3000_write_reg(uint16_t reg_addr, const uint8_t *data, size_t len)
     return err;
 }
 
+static esp_err_t dw3000_read_sys_status(uint32_t *status)
+{
+    uint8_t sys_status[5] = {0};
+    esp_err_t err = dw3000_read_reg(DW3000_SYS_STATUS, sys_status, 5);
+    if (err != ESP_OK) {
+        return err;
+    }
+
+    *status = sys_status[0] | ((uint32_t)sys_status[1] << 8) | ((uint32_t)sys_status[2] << 16) | ((uint32_t)sys_status[3] << 24);
+    return ESP_OK;
+}
+
+static esp_err_t dw3000_clear_sys_status(uint32_t mask)
+{
+    uint8_t sys_status_clear[5] = {0};
+    sys_status_clear[0] = mask & 0xFF;
+    sys_status_clear[1] = (mask >> 8) & 0xFF;
+    sys_status_clear[2] = (mask >> 16) & 0xFF;
+    sys_status_clear[3] = (mask >> 24) & 0xFF;
+    return dw3000_write_reg(DW3000_SYS_STATUS, sys_status_clear, 5);
+}
+
+esp_err_t dw3000_get_rx_timestamp(uint64_t *timestamp)
+{
+    if (!timestamp) {
+        return ESP_ERR_INVALID_ARG;
+    }
+
+    uint8_t buf[5];
+    esp_err_t err = dw3000_read_reg(DW3000_RX_TIME, buf, 5);
+    if (err != ESP_OK) {
+        return err;
+    }
+
+    *timestamp = 0;
+    for (int i = 0; i < 5; i++) {
+        *timestamp |= ((uint64_t)buf[i] << (8 * i));
+    }
+    return ESP_OK;
+}
+
+esp_err_t dw3000_get_tx_timestamp(uint64_t *timestamp)
+{
+    if (!timestamp) {
+        return ESP_ERR_INVALID_ARG;
+    }
+
+    uint8_t buf[5];
+    esp_err_t err = dw3000_read_reg(DW3000_TX_TIME, buf, 5);
+    if (err != ESP_OK) {
+        return err;
+    }
+
+    *timestamp = 0;
+    for (int i = 0; i < 5; i++) {
+        *timestamp |= ((uint64_t)buf[i] << (8 * i));
+    }
+    return ESP_OK;
+}
+
+esp_err_t dw3000_set_tx_timestamp(uint64_t timestamp)
+{
+    uint8_t buf[5];
+    for (int i = 0; i < 5; i++) {
+        buf[i] = (timestamp >> (8 * i)) & 0xFF;
+    }
+    return dw3000_write_reg(DW3000_TX_TIME, buf, 5);
+}
+
+esp_err_t dw3000_wait_tx_done(uint32_t timeout_ms)
+{
+    uint32_t start = xTaskGetTickCount();
+    while ((xTaskGetTickCount() - start) * portTICK_PERIOD_MS < timeout_ms) {
+        uint32_t status = 0;
+        esp_err_t err = dw3000_read_sys_status(&status);
+        if (err != ESP_OK) {
+            return err;
+        }
+        if (status & DW3000_SYS_STATUS_TXFRS) {
+            dw3000_clear_sys_status(DW3000_SYS_STATUS_TXFRS);
+            return ESP_OK;
+        }
+        vTaskDelay(pdMS_TO_TICKS(1));
+    }
+    return ESP_ERR_TIMEOUT;
+}
+
 esp_err_t dw3000_reset(void)
 {
-    // Hardware reset via GPIO
-    gpio_set_level(GPIO_NUM_14, 0);
+    gpio_set_level(UWB_RST_GPIO, 0);
     vTaskDelay(pdMS_TO_TICKS(10));
-    gpio_set_level(GPIO_NUM_14, 1);
+    gpio_set_level(UWB_RST_GPIO, 1);
     vTaskDelay(pdMS_TO_TICKS(10));
 
     return ESP_OK;
@@ -85,7 +182,7 @@ esp_err_t dw3000_reset(void)
 esp_err_t dw3000_wakeup(void)
 {
     // Wakeup via GPIO
-    gpio_set_level(GPIO_NUM_15, 1);
+    gpio_set_level(UWB_WAKEUP_GPIO, 1);
     vTaskDelay(pdMS_TO_TICKS(1));
 
     return ESP_OK;
@@ -93,7 +190,7 @@ esp_err_t dw3000_wakeup(void)
 
 esp_err_t dw3000_init(void)
 {
-    ESP_LOGI(TAG, "Initializing DW3000...");
+    ESP_LOGI(TAG, "Initializing DW3000 / DWM300...");
 
     // Reset the device
     ESP_ERROR_CHECK(dw3000_reset());
@@ -109,11 +206,14 @@ esp_err_t dw3000_init(void)
         ESP_LOGE(TAG, "Failed to read device ID: %s", esp_err_to_name(err));
         return err;
     }
-    ESP_LOGI(TAG, "DW3000 Device ID: %02x%02x%02x%02x", dev_id[3], dev_id[2], dev_id[1], dev_id[0]);
+    ESP_LOGI(TAG, "DW3000/DWM300 Device ID: %02x%02x%02x%02x", dev_id[3], dev_id[2], dev_id[1], dev_id[0]);
 
-    // Check if it's a valid DW3000 device ID (should be 0xDECA0130 for DW3000)
+    // Check if it's a valid DW3000 device ID (should be 0xDECA0130 for DW3000/DWM300)
     if (dev_id[3] != 0xDE || dev_id[2] != 0xCA || dev_id[1] != 0x01 || dev_id[0] != 0x30) {
-        ESP_LOGE(TAG, "Invalid device ID - DW3000 not detected!");
+        ESP_LOGE(TAG, "Invalid device ID - DW3000/DWM300 not detected!");
+        if (dev_id[3] == 0x00 && dev_id[2] == 0x00 && dev_id[1] == 0x00 && dev_id[0] == 0x00) {
+            ESP_LOGE(TAG, "Readback is all zero - check SPI wiring, CS pin, RESET and WAKEUP.");
+        }
         return ESP_ERR_NOT_FOUND;
     }
 
@@ -160,13 +260,15 @@ esp_err_t dw3000_start_rx(void)
     uint8_t sys_ctrl[4] = {0x00, 0x00, 0x00, 0x00};
     sys_ctrl[1] |= 0x01;  // RXENAB bit
 
+    // Clear old status bits before RX
+    dw3000_clear_sys_status(DW3000_SYS_STATUS_RXFCG);
     return dw3000_write_reg(DW3000_SYS_CTRL, sys_ctrl, 4);
 }
 
 esp_err_t dw3000_stop_rx(void)
 {
     uint8_t sys_ctrl[4] = {0x00, 0x00, 0x00, 0x00};
-    sys_ctrl[0] |= 0x01;  // TRXOFF bit
+    sys_ctrl[0] |= 0x40;  // TRXOFF bit
 
     return dw3000_write_reg(DW3000_SYS_CTRL, sys_ctrl, 4);
 }

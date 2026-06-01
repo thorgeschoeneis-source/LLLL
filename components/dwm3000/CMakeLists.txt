@@ -1,0 +1,2 @@
+idf_component_register(SRCS "dwm3000.c"
+                    INCLUDE_DIRS "")
