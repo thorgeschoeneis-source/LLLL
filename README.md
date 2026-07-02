@@ -1,87 +1,39 @@
-# UWB3000 Communication Example
+# ESP32-C6 UWB Tag Bringup
 
-This project demonstrates communication between two ESP32-C6 boards using DWM300 / DW3000 UWB modules.
+This repository contains a minimal ESP-IDF 6.0 project for an ESP32-C6 with a Quervo DWM3000 module. The current focus is a clean hardware bringup and a stable UWB tag baseline.
 
-## Hardware Setup
+## Current wiring
 
-Each board needs:
-- ESP32-C6 microcontroller
-- DWM300 / DW3000 UWB module
-- Connections as per pin mapping below
+| Signal | ESP32-C6 GPIO |
+| --- | --- |
+| DW3000 IRQ | GPIO5 |
+| DW3000 RESET | GPIO14 |
+| DW3000 WAKEUP | GPIO15 |
+| DW3000 MOSI | GPIO7 |
+| DW3000 MISO | GPIO4 |
+| DW3000 CLK | GPIO3 |
+| DW3000 CS | GPIO6 |
 
-## Pin Mapping
+## Build and flash
 
-| ESP32-C6 Pin | DWM300 Pin | Function |
-|-------------|-------------|----------|
-| GPIO6       | SCLK        | SPI Clock |
-| GPIO9       | MISO        | SPI Master In Slave Out |
-| GPIO10      | IRQ         | Interrupt Request |
-| GPIO15      | CS          | SPI Chip Select |
-| GPIO16      | MOSI        | SPI Master Out Slave In |
-| GPIO19      | RESET       | Reset signal |
-| GPIO24      | WAKEUP      | Wakeup signal |
-| GPIO8       | -           | Status LED |
-
-## Board Configuration
-
-### Board 1 (Master)
-In `main/main.c`, set:
-```c
-#define BOARD_IS_MASTER    true
+```bash
+idf.py build
+idf.py -p COM11 flash monitor
 ```
 
-### Board 2 (Slave)
-In `main/main.c`, set:
-```c
-#define BOARD_IS_MASTER    false
+If your ESP-IDF shell is not already active on Windows, use:
+
+```powershell
+cmd /c "call C:\esp\v6.0\esp-idf\export.bat && cd /d C:\Users\mikao\Documents\GitHub\LLLL && idf.py build"
 ```
 
-## How It Works
+## Structure
 
-1. **Master Board**: Sends "PING" messages every 2 seconds
-2. **Slave Board**: Listens for messages and responds with "PONG"
-3. Both boards blink their LEDs when communication occurs
-4. Serial output shows communication status
+- `main/main.c` - application entrypoint and UWB bringup
+- `sdkconfig.defaults` - default configuration for the ESP32-C6 + DWM3000 setup
+- `components/decadriver` - DW3000 platform layer
+- `components/libdeca` - libdeca integration and ranging helpers
 
-## Building and Flashing
+## Status
 
-1. Configure ESP-IDF environment
-2. Build: `idf.py build`
-3. Flash: `idf.py flash`
-4. Monitor: `idf.py monitor`
-
-## Expected Output
-
-### Master Board:
-```
-I (1234) UWB_COMM: Board configured as MASTER (address 0x0100)
-I (2234) UWB_COMM: Sending PING (seq: 0)
-I (3234) UWB_COMM: Received response: PONG (seq: 0)
-I (4234) UWB_COMM: Sending PING (seq: 1)
-...
-```
-
-### Slave Board:
-```
-I (1234) UWB_COMM: Board configured as SLAVE (address 0x0200)
-I (2234) UWB_COMM: Received: PING (seq: 0)
-I (2234) UWB_COMM: Sending PONG (seq: 0)
-I (4234) UWB_COMM: Received: PING (seq: 1)
-...
-```
-
-## Troubleshooting
-
-- Ensure antennas are properly connected
-- Check power supply (3.3V)
-- Verify SPI connections
-- Make sure boards are within UWB range (up to ~100m line-of-sight)
-- Check serial output for error messages
-
-## Files
-
-- `main/main.c` - Main application with UWB communication
-- `main/dw3000.h` - DW3000 register definitions and function declarations
-- `main/dw3000.c` - DW3000 driver implementation
-- `main/CMakeLists.txt` - Build configuration
-
+The project currently boots the DW3000 stack and is being rebuilt toward a clean tag-oriented UWB workflow.
